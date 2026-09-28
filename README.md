@@ -12,7 +12,10 @@ It grew out of the [nzyme floor plan editor](https://github.com/MissSophieSterli
 - Drag anything to move it. Rooms line up with neighbouring walls. Doors and windows snap onto the nearest wall and turn to face into the room. Moving a room moves the doors, windows and furniture inside it.
 - Drag the blue dot to resize, or type exact sizes in the panel that opens.
 - Pinch to zoom and drag empty space to pan. With a mouse, use the wheel.
-- Add as many floors as you need. Tap the current floor's name to rename it.
+- Add as many floors as you need. The floor strip runs from the bottom floor up. Tap the current floor for more options: add a floor above or below, rename, reorder or delete. The ▲ ▼ buttons on the canvas go up and down one floor.
+- The floor below shows faintly under the one you're editing, so walls and shafts line up. You can turn this off in the menu.
+- Stairs, L-shaped and spiral stairs, lifts, escalators and ramps are in the **Stairs & lifts** tab. Select one and tap **Continue to…** to put it on the next floor as well. The copies stay lined up, and **Go to…** jumps between them.
+- The plan stays on screen when you rotate the phone or resize the window. On a phone held sideways, the tiles move to a column on the right.
 - Metres or feet, switchable at any time from the menu.
 - Undo and redo. The plan autosaves in the browser.
 - Installable as an app (PWA) and works offline after the first visit.
@@ -24,9 +27,9 @@ It grew out of the [nzyme floor plan editor](https://github.com/MissSophieSterli
 | PNG, JPG | current floor | anything; also as a trace-over image in nzyme, Floorplanner, RoomSketcher, Planner 5D |
 | PDF | all floors, one A4 page each | any PDF reader, printers |
 | SVG | current floor | Illustrator, Inkscape, Figma, browsers |
-| DXF (R12, metres) | current floor, on WALLS / DOORS / WINDOWS / FURNITURE / ROOM_LABELS layers | AutoCAD, LibreCAD, DraftSight, SketchUp Pro, Revit, Chief Architect, and most CAD tools |
+| DXF (R12, metres) | current floor, on WALLS / DOORS / WINDOWS / STAIRS_LIFTS / FURNITURE / ROOM_LABELS layers | AutoCAD, LibreCAD, DraftSight, SketchUp Pro, Revit, Chief Architect, and most CAD tools |
 | Sweet Home 3D (`.sh3d`) | all floors as levels, with rooms and walls | Sweet Home 3D 5.3 and later |
-| OBJ | all floors stacked: floors, 2.5 m walls, furniture as blocks | Blender, SketchUp, 3ds Max, Unity, most 3D tools |
+| OBJ | all floors stacked bottom to top: floors, 2.5 m walls, furniture as blocks, lift shafts at full storey height | Blender, SketchUp, 3ds Max, Unity, most 3D tools |
 | CSV | room list with sizes and areas | Excel, Numbers, Google Sheets |
 | JSON | the full editable plan | this editor, or any app that embeds it |
 

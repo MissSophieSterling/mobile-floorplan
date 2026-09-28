@@ -52,17 +52,29 @@ FP.CATALOG = {
     {kind:'bath',     label:'Bathtub',    name:'Bathtub',    w:170, h:75},
     {kind:'shower',   label:'Shower',     name:'Shower',     w:90,  h:90},
     {kind:'washer',   label:'Washer',     name:'Washer',     w:60,  h:60},
-    {kind:'stairs',   label:'Stairs',     name:'Stairs',     w:100, h:280},
     {kind:'plant',    label:'Plant',      name:'Plant',      w:45,  h:45},
   ],
+  // things that connect one floor to another
+  circulation: [
+    {kind:'stairs',   label:'Stairs',       name:'Stairs',       w:100, h:280},
+    {kind:'lstairs',  label:'L-stairs',     name:'Stairs',       w:200, h:260},
+    {kind:'spiral',   label:'Spiral stairs',name:'Spiral stairs',w:160, h:160},
+    {kind:'elevator', label:'Lift',         name:'Lift',         w:180, h:180},
+    {kind:'escalator',label:'Escalator',    name:'Escalator',    w:110, h:520},
+    {kind:'ramp',     label:'Ramp',         name:'Ramp',         w:150, h:600},
+  ],
 };
+// kinds that link floors; copies on other floors share a "link" id and stay lined up
+FP.VERTICAL = {stairs:1, lstairs:1, spiral:1, elevator:1, escalator:1, ramp:1};
+FP.isVertical = it => !!FP.VERTICAL[it.kind];
 FP.OPENINGS = {door:1, dbldoor:1, slider:1, window:1, opening:1};
 FP.WALL_MOUNTED = FP.OPENINGS; // these snap onto room walls
 // items whose depth is fixed (only width is resizable)
 FP.FIXED_DEPTH = {slider:16, window:16, opening:16};
 // rough heights for the 3D export, cm
 FP.HEIGHTS = {bed:55, sofa:85, armchair:85, table:75, rtable:75, chair:90, desk:75, wardrobe:200, tv:50,
-  counter:90, stove:90, fridge:180, ksink:90, toilet:75, sink:85, bath:55, shower:4, washer:85, stairs:20, plant:90};
+  counter:90, stove:90, fridge:180, ksink:90, toilet:75, sink:85, bath:55, shower:4, washer:85, plant:90,
+  stairs:20, lstairs:20, spiral:20, elevator:250, escalator:100, ramp:10};
 
 FP.isRoom = it => it.kind === 'room';
 FP.isOpening = it => !!FP.OPENINGS[it.kind];
@@ -139,6 +151,38 @@ FP.symbol = function(it){
       for (let i=1;i<n;i++) L(0,h*i/n,w,h*i/n);
       L(w/2,h*0.92,w/2,h*0.08); L(w/2,h*0.08,w*0.38,h*0.2); L(w/2,h*0.08,w*0.62,h*0.2); break;
     }
+    case 'lstairs': {
+      // first flight runs up the left side, turns at a landing, second flight runs right
+      const t = Math.min(w, h) * 0.45;
+      R(0,0,t,h,0,{fill:'#ffffff'}); R(t,0,w-t,t,0,{fill:'#ffffff'});
+      const n1 = Math.max(3, Math.round((h-t)/28)), n2 = Math.max(3, Math.round((w-t)/28));
+      for (let i=0;i<n1;i++) L(0,t+(h-t)*i/n1,t,t+(h-t)*i/n1);
+      for (let i=1;i<=n2;i++) L(t+(w-t)*i/n2,0,t+(w-t)*i/n2,t);
+      L(t/2,h*0.94,t/2,t/2); L(t/2,t/2,w*0.94,t/2);
+      L(w*0.94,t/2,w*0.94-t*0.2,t*0.3); L(w*0.94,t/2,w*0.94-t*0.2,t*0.7); break;
+    }
+    case 'spiral': {
+      const r = Math.min(w,h)/2, cx = w/2, cy = h/2, r0 = r*0.14;
+      C(cx,cy,r); C(cx,cy,r0);
+      for (let i=0;i<12;i++){ const a = i/12*2*Math.PI; L(cx+r0*Math.cos(a),cy+r0*Math.sin(a),cx+r*Math.cos(a),cy+r*Math.sin(a)); }
+      A(cx,cy,r*0.62,200,340);
+      const ea = 340*Math.PI/180, ex = cx+r*0.62*Math.cos(ea), ey = cy+r*0.62*Math.sin(ea);
+      L(ex,ey,ex-r*0.2,ey-r*0.02); L(ex,ey,ex-r*0.06,ey+r*0.18); break;
+    }
+    case 'elevator':
+      // shaft, car with the usual cross, doors on the bottom edge
+      R(0,0,w,h); R(w*0.1,h*0.08,w*0.8,h*0.72); L(w*0.1,h*0.08,w*0.9,h*0.8); L(w*0.9,h*0.08,w*0.1,h*0.8);
+      L(w*0.25,h*0.9,w*0.75,h*0.9); L(w*0.5,h*0.84,w*0.5,h*0.96); break;
+    case 'escalator': {
+      R(0,0,w,h); R(w*0.12,h*0.08,w*0.76,h*0.84);
+      const n = Math.max(6, Math.round(h*0.84/22));
+      for (let i=1;i<n;i++) L(w*0.12,h*0.08+h*0.84*i/n,w*0.88,h*0.08+h*0.84*i/n);
+      L(w/2,h*0.86,w/2,h*0.14); L(w/2,h*0.14,w*0.32,h*0.14+w*0.22); L(w/2,h*0.14,w*0.68,h*0.14+w*0.22); break;
+    }
+    case 'ramp':
+      R(0,0,w,h);
+      for (let i=1;i<5;i++){ const y = h*(0.1+0.8*i/5); L(w*0.2,y+w*0.12,w/2,y); L(w/2,y,w*0.8,y+w*0.12); }
+      L(w/2,h*0.94,w/2,h*0.1); break;
     case 'plant': C(w/2,h/2,Math.min(w,h)/2); C(w/2,h/2,Math.min(w,h)*0.22); break;
     default: R(0,0,w,h);
   }
@@ -205,7 +249,8 @@ FP.floorBounds = function(floor){
    opt.u     = plan units per screen pixel (controls text and stroke sizes)
    opt.units = 'm' | 'ft'
    opt.sel   = selected item id (editor only)
-   opt.editor= true to add hit-test data attributes and handles */
+   opt.editor= true to add hit-test data attributes and handles
+   opt.guide = true to draw a faint, label-free copy (the floor below, as a tracing guide) */
 FP.floorSVG = function(floor, opt){
   const u = opt.u, units = opt.units, paper = opt.paper || '#ffffff';
   const wallC = '#26303c', inkC = '#1b232e', dimC = '#6b7584', furnC = '#4a5563', sel = opt.sel;
@@ -225,7 +270,8 @@ FP.floorSVG = function(floor, opt){
   }
   for (const it of furn){
     s += `<g${data(it)} transform="${FP.itemTransform(it)}">`;
-    s += `<rect x="0" y="0" width="${n(it.w)}" height="${n(it.h)}" fill="${it.id===sel?'#dce9ff':'#ffffff'}" fill-opacity="${it.id===sel?1:0.85}"/>`;
+    const bg = it.id === sel ? '#dce9ff' : (it.kind === 'lstairs' ? 'transparent' : '#ffffff');
+    s += `<rect x="0" y="0" width="${n(it.w)}" height="${n(it.h)}" fill="${bg}" fill-opacity="${it.id===sel?1:0.85}"/>`;
     for (const p of FP.symbol(it)) s += primToSVG(p, furnC, Math.max(1.2*u, 1.2), paper);
     s += `</g>`;
   }
@@ -235,6 +281,7 @@ FP.floorSVG = function(floor, opt){
     for (const p of FP.symbol(it)) s += primToSVG(p, wallC, Math.max(1.6*u, 1.6), paper);
     s += `</g>`;
   }
+  if (opt.guide) return s;
   // labels
   for (const r of rooms){
     const fs = Math.min(13*u, r.w/7, r.h/3.2);

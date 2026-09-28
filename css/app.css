@@ -72,6 +72,14 @@ input{font:inherit}
 .stage{flex:1; position:relative; min-height:0; background:var(--paper); overflow:hidden}
 #canvas{position:absolute; inset:0; width:100%; height:100%; touch-action:none; display:block}
 .stage-tools{position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:8px}
+.lift{display:flex; flex-direction:column; background:var(--surface); border-radius:12px; box-shadow:var(--shadow); overflow:hidden}
+.lift .icon-btn{border-radius:0}
+.lift .icon-btn+.icon-btn{border-top:1px solid var(--line)}
+.floor-badge{
+  position:absolute; left:10px; top:10px; font-size:12.5px; font-weight:650; color:var(--ink);
+  background:var(--surface); box-shadow:var(--shadow); padding:5px 10px; border-radius:10px; pointer-events:none;
+  max-width:calc(100% - 90px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
 .hint{
   position:absolute; left:50%; top:40%; transform:translate(-50%,-50%);
   color:#7b8594; font-size:15px; text-align:center; pointer-events:none; padding:0 24px; width:100%;
@@ -87,10 +95,11 @@ input{font:inherit}
   background:var(--surface); border-top:1px solid var(--line);
   padding-bottom:env(safe-area-inset-bottom); min-height:var(--dock-h);
 }
-.dock-tabs{display:flex; gap:4px; padding:8px 8px 0}
+.dock-tabs{display:flex; gap:4px; padding:8px 8px 0; overflow-x:auto; scrollbar-width:none}
+.dock-tabs::-webkit-scrollbar{display:none}
 .dock-tab{
-  flex:1; height:34px; border:0; border-radius:10px; background:transparent;
-  color:var(--dim); font-weight:600; font-size:13px; cursor:pointer; white-space:nowrap; padding:0 4px;
+  flex:1 0 auto; height:34px; border:0; border-radius:10px; background:transparent;
+  color:var(--dim); font-weight:600; font-size:13px; cursor:pointer; white-space:nowrap; padding:0 8px;
 }
 .dock-tab.active{background:var(--surface2); color:var(--ink)}
 .palette{
@@ -134,6 +143,8 @@ input{font:inherit}
   font-weight:600; font-size:13.5px; cursor:pointer;
 }
 .props-actions .danger{color:var(--danger)}
+.link-row button{font-size:13px}
+.link-row .go{color:var(--accent); border-color:var(--accent)}
 .props-actions .ok{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
 .area{font-size:12.5px; color:var(--dim); margin-top:6px}
 
@@ -152,6 +163,10 @@ input{font:inherit}
   display:block; width:100%; text-align:left; min-height:48px; padding:12px 14px; margin-bottom:6px;
   border:0; border-radius:12px; background:var(--surface2); font-weight:600; cursor:pointer;
 }
+.sheet-item:disabled{opacity:.4; cursor:default}
+.sheet-item.danger{color:var(--danger)}
+.floor-move{display:flex; gap:6px}
+.floor-move .sheet-item{flex:1}
 .sheet-item.muted{background:transparent; color:var(--dim); text-align:center}
 .sheet-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 4px 12px}
 .sheet-row>span{font-weight:600}
@@ -190,6 +205,23 @@ input{font:inherit}
   opacity:0; transition:.2s; pointer-events:none; z-index:60; max-width:90vw; text-align:center;
 }
 .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+/* phones on their side: tiles move to a column on the right so the plan keeps its height */
+@media (orientation: landscape) and (max-height: 540px){
+  body{display:grid; grid-template-columns:minmax(0,1fr) min(300px, 40vw); grid-template-rows:auto auto minmax(0,1fr)}
+  .topbar{grid-column:1 / -1; padding-top:calc(2px + env(safe-area-inset-top)); padding-bottom:2px}
+  .topbar .icon-btn{height:40px}
+  .floors{grid-column:1; grid-row:2; padding:4px 8px}
+  .floor-tab{height:30px}
+  .stage{grid-column:1; grid-row:3}
+  .dock{grid-column:2; grid-row:2 / 4; border-top:0; border-left:1px solid var(--line); min-height:0; overflow-y:auto;
+    padding-right:env(safe-area-inset-right)}
+  .palette{flex-wrap:wrap; overflow:visible; padding:8px}
+  .tile{width:calc(33.3% - 6px); min-width:72px}
+  .props-grid,.props-actions{flex-wrap:wrap}
+  .props-actions button{flex:1 1 40%}
+  .toast{bottom:24px}
+}
 
 /* wider screens: dock gets a bit more room, still bottom-anchored */
 @media (min-width:900px){

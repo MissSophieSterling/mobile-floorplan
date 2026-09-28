@@ -1,5 +1,5 @@
 // Mobile Floorplan offline cache. Network first, so updates show up straight away.
-const CACHE = 'mobile-floorplan-v1';
+const CACHE = 'mobile-floorplan-v2';
 const FILES = ['./', 'index.html', 'css/app.css', 'js/shapes.js', 'js/exporters.js', 'js/app.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));

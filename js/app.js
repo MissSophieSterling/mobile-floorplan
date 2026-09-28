@@ -46,8 +46,15 @@ function blankPlan(){
     floors:[{id:uid(), name:'Ground floor', items:[]}]};
 }
 function samplePlan(){
-  const it = (kind, name, x, y, w, h, rot) => ({id:uid(), kind, name, x, y, w, h, rot:rot||0});
+  const it = (kind, name, x, y, w, h, rot, link) => Object.assign({id:uid(), kind, name, x, y, w, h, rot:rot||0}, link ? {link} : {});
+  const stairLink = uid();
+  // floors are listed bottom to top
   return {format:PLAN_FORMAT, version:PLAN_VERSION, name:'Sample apartment', units:'m', floors:[
+    {id:uid(), name:'Basement', items:[
+      it('room','Rec room',0,0,520,420), it('room','Utility',520,0,320,300), it('room','Stair hall',520,300,320,120),
+      it('stairs','Stairs',600,310,100,160,90,stairLink), it('washer','Washer',770,10,60,60),
+      it('door','Door',520,100,80,80,270), it('door','Door',520,320,80,80,270), it('window','Window',150,-8,200,16),
+    ]},
     {id:uid(), name:'Ground floor', items:[
       it('room','Living room',0,0,520,420), it('room','Kitchen',520,0,320,300), it('room','Hallway',520,300,320,120),
       it('room','Bedroom',0,420,380,340), it('room','Bathroom',380,420,220,200), it('room','Office',600,420,240,340),
@@ -60,11 +67,7 @@ function samplePlan(){
       it('bed','Double bed',10,520,160,200,270), it('wardrobe','Wardrobe',250,690,120,60,180),
       it('bath','Bathtub',400,535,170,75), it('toilet','Toilet',545,440,40,65),
       it('counter','Counter',530,10,240,60), it('fridge','Fridge',770,10,70,70), it('table','Table',600,150,160,90),
-      it('desk','Desk',650,680,140,70,180),
-    ]},
-    {id:uid(), name:'Basement', items:[
-      it('room','Rec room',0,0,560,420), it('room','Utility',560,0,280,240), it('room','Storage',560,240,280,180),
-      it('stairs','Stairs',20,20,100,280), it('washer','Washer',760,10,60,60), it('door','Door',640,240,80,80),
+      it('desk','Desk',650,680,140,70,180), it('stairs','Stairs',600,310,100,160,90,stairLink),
     ]},
   ]};
 }
@@ -86,6 +89,7 @@ function sanitizePlan(p){
       const rot = [0,90,180,270].includes(i.rot) ? i.rot : 0;
       floor.items.push({id:str(i.id, uid(), 40) || uid(), kind:i.kind, name:str(i.name, i.kind),
         x:num(i.x,0,-1e5,1e5), y:num(i.y,0,-1e5,1e5), w:num(i.w,100,5,1e5), h:num(i.h,100,5,1e5), rot});
+      if (typeof i.link === 'string' && i.link && FP.VERTICAL[i.kind]) floor.items[floor.items.length-1].link = i.link.slice(0, 40);
     }
     out.floors.push(floor);
   }
@@ -111,13 +115,19 @@ function initialPlan(){
 let plan = initialPlan();
 if (params.get('units') === 'ft' || params.get('units') === 'm') plan.units = params.get('units');
 if (params.get('name')) plan.name = str(params.get('name'), plan.name);
-let cur = 0, sel = null;
+let cur = startFloor(plan), sel = null;
+// Floors are stored bottom to top. Open on the ground floor when we can tell which one it is.
+function startFloor(p){
+  const i = p.floors.findIndex(f => /ground|main|entry|street|^(level|floor) ?(0|1)$|^g$|^l?1$/i.test(f.name.trim()));
+  return i >= 0 ? i : 0;
+}
 const floor = () => plan.floors[cur];
 const findItem = id => floor().items.find(i => i.id === id);
 
 // ---- history ----
 let undoStack = [], redoStack = [], snap = JSON.stringify(plan);
 function commit(){
+  syncLinked();
   const now = JSON.stringify(plan);
   if (now === snap) return;
   undoStack.push(snap); if (undoStack.length > 100) undoStack.shift();
@@ -129,6 +139,17 @@ function restore(){
   plan = JSON.parse(snap); cur = Math.min(cur, plan.floors.length-1);
   if (sel && !findItem(sel)) sel = null;
   buildFloors(); render(); showPanel(); afterChange();
+}
+// Stairs, lifts and escalators that continue onto other floors share a link id.
+// Whatever happens to one on this floor is copied to its partners so the shaft lines up.
+function syncLinked(){
+  for (const it of floor().items){
+    if (!it.link) continue;
+    plan.floors.forEach((f, fi) => {
+      if (fi === cur) return;
+      for (const o of f.items) if (o.link === it.link){ o.kind = it.kind; o.x = it.x; o.y = it.y; o.w = it.w; o.h = it.h; o.rot = it.rot; }
+    });
+  }
 }
 function resetHistory(){ undoStack = []; redoStack = []; snap = JSON.stringify(plan); afterChange(); }
 let changeTimer = 0;
@@ -144,17 +165,29 @@ function afterChange(){
 // ---------------------------------------------------------------------------
 const svg = $('canvas'), world = $('world'), stage = $('stage');
 const view = {s:0.6, tx:40, ty:40};
+let userView = false;   // true once the user pans or zooms; until then we keep the plan fitted
+let showGuide = true;   // faint copy of the floor below, for lining things up
 const step = () => plan.units === 'ft' ? 15.24 : 10;   // snap: 6 inches or 10 cm
 const snapV = v => Math.round(v/step())*step();
 
 function fit(){
-  const b = FP.floorBounds(floor()), r = stage.getBoundingClientRect();
+  userView = false;
+  // include the faint floor below, so a new floor with only stairs on it still shows the building
+  const below = showGuide && cur > 0 ? FP.floorBounds(plan.floors[cur-1]) : null;
+  let b = FP.floorBounds(floor());
+  if (below) b = b ? unionBox(b, below) : below;
+  const r = stage.getBoundingClientRect();
+  if (!r.width || !r.height) return;
   if (!b){ view.s = Math.min(r.width, r.height)/900; view.tx = r.width/2 - 450*view.s; view.ty = r.height/2 - 450*view.s; render(); return; }
-  const pad = 48;
+  const pad = Math.min(48, Math.min(r.width, r.height) * 0.08);
   view.s = Math.max(0.03, Math.min(4, Math.min((r.width-pad*2)/b.w, (r.height-pad*2)/b.h)));
   view.tx = (r.width - b.w*view.s)/2 - b.x*view.s;
   view.ty = (r.height - b.h*view.s)/2 - b.y*view.s;
   render();
+}
+function unionBox(a, c){
+  const x = Math.min(a.x, c.x), y = Math.min(a.y, c.y);
+  return {x, y, w:Math.max(a.x+a.w, c.x+c.w) - x, h:Math.max(a.y+a.h, c.y+c.h) - y};
 }
 function toWorld(cx, cy){ const r = svg.getBoundingClientRect(); return {x:(cx - r.left - view.tx)/view.s, y:(cy - r.top - view.ty)/view.s}; }
 
@@ -165,7 +198,9 @@ function render(){
   $('gridPath').setAttribute('d', `M${g} 0H0V${g}`);
   $('gridPath').setAttribute('stroke-width', u);
   world.setAttribute('transform', `translate(${view.tx} ${view.ty}) scale(${view.s})`);
+  const below = showGuide && cur > 0 ? plan.floors[cur-1] : null;
   world.innerHTML = `<rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#gridMinor)" data-bg="1"/>` +
+    (below && below.items.length ? `<g opacity="0.2" pointer-events="none">${FP.floorSVG(below, {u, units:plan.units, guide:true})}</g>` : '') +
     FP.floorSVG(floor(), {u, units:plan.units, sel, editor:true});
   $('hint').hidden = floor().items.length > 0;
 }
@@ -308,7 +343,7 @@ svg.addEventListener('pointermove', e => {
   if (!gesture.moved && dist < 4) return;
   gesture.moved = true;
   if (gesture.mode === 'pan'){
-    view.tx = gesture.tx + e.clientX - gesture.sx; view.ty = gesture.ty + e.clientY - gesture.sy; render();
+    view.tx = gesture.tx + e.clientX - gesture.sx; view.ty = gesture.ty + e.clientY - gesture.sy; userView = true; render();
   } else {
     const it = findItem(gesture.id); if (!it) return;
     const p = toWorld(e.clientX, e.clientY);
@@ -352,14 +387,14 @@ function doPinch(){
   const mid = {x:(a.x+b.x)/2 - r.left, y:(a.y+b.y)/2 - r.top};
   view.s = Math.max(0.03, Math.min(6, gesture.s0 * Math.hypot(a.x-b.x, a.y-b.y) / gesture.d0));
   view.tx = mid.x - gesture.wx*view.s; view.ty = mid.y - gesture.wy*view.s;
-  render();
+  userView = true; render();
 }
 svg.addEventListener('wheel', e => {
   e.preventDefault();
   const r = svg.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
   const wx = (mx - view.tx)/view.s, wy = (my - view.ty)/view.s;
   view.s = Math.max(0.03, Math.min(6, view.s * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))));
-  view.tx = mx - wx*view.s; view.ty = my - wy*view.s; render();
+  view.tx = mx - wx*view.s; view.ty = my - wy*view.s; userView = true; render();
 }, {passive:false});
 
 // ---------------------------------------------------------------------------
@@ -457,6 +492,7 @@ function showPanel(){
       <div class="field"><label for="pH">${FP.isRoom(it) ? 'Length' : 'Depth'} (${U})</label><input id="pH" type="number" inputmode="decimal" step="${stepU}" min="0.1" ${depthLocked ? 'disabled' : ''}></div>
     </div>
     <div class="area" id="pArea"></div>
+    ${FP.isVertical(it) ? `<div class="props-actions link-row">${linkButton(it, +1)}${linkButton(it, -1)}</div>` : ''}
     <div class="props-actions">
       <button id="pRot" type="button">⟳ Rotate</button>
       <button id="pDup" type="button">Duplicate</button>
@@ -477,12 +513,39 @@ function showPanel(){
   $('pW').addEventListener('change', commit); $('pH').addEventListener('change', commit);
   $('pRot').onclick = () => { rotateItem(it); commit(); render(); updatePanelNumbers(); };
   $('pDup').onclick = () => {
-    const c = Object.assign({}, it, {id:uid(), x:it.x + 40, y:it.y + 40});
+    const c = Object.assign({}, it, {id:uid(), x:it.x + 40, y:it.y + 40}); delete c.link;
     floor().items.push(c); sel = c.id; commit(); render(); showPanel();
   };
   $('pDel').onclick = deleteSelected;
+  props.querySelectorAll('[data-link]').forEach(b => b.onclick = () => followLink(it, Number(b.dataset.link)));
   $('pOk').onclick = () => { sel = null; render(); showPanel(); };
   updatePanelNumbers();
+}
+// Stairs, lifts and escalators: "continue up/down" makes a linked copy on the next floor,
+// "go up/down" jumps there once the copy exists.
+function partnerOn(fi, it){ return it.link && plan.floors[fi] ? plan.floors[fi].items.find(o => o.link === it.link) : null; }
+function linkButton(it, dir){
+  const fi = cur + dir, f = plan.floors[fi], arrow = dir > 0 ? '↑' : '↓';
+  if (!f) return `<button type="button" data-link="${dir}">${arrow} New floor ${dir > 0 ? 'above' : 'below'}</button>`;
+  const name = FP.esc(f.name.length > 14 ? f.name.slice(0, 13) + '…' : f.name);
+  return partnerOn(fi, it)
+    ? `<button type="button" class="go" data-link="${dir}">${arrow} Go to ${name}</button>`
+    : `<button type="button" data-link="${dir}">${arrow} Continue to ${name}</button>`;
+}
+function followLink(it, dir){
+  if (!it.link) it.link = uid();
+  // no floor there yet: make one (it picks up this and any other stairs or lifts)
+  if (!plan.floors[cur + dir]){ addFloor(dir > 0 ? cur + 1 : cur); }
+  else {
+    const fi = cur + dir;
+    if (!partnerOn(fi, it)){
+      plan.floors[fi].items.push({id:uid(), kind:it.kind, name:it.name, x:it.x, y:it.y, w:it.w, h:it.h, rot:it.rot, link:it.link});
+      toast(`${it.name || 'Stairs'} now continue to ${plan.floors[fi].name}`);
+    } else toast((dir > 0 ? '↑ ' : '↓ ') + plan.floors[fi].name, 1200);
+    cur = fi;
+  }
+  const other = floor().items.find(o => o.link === it.link);
+  sel = other ? other.id : null; commit(); buildFloors(); render(); showPanel();
 }
 function areaText(it){ return FP.isRoom(it) ? 'Floor area ' + FP.fmtArea(it.w*it.h, plan.units) : ''; }
 function updatePanelNumbers(){
@@ -501,41 +564,90 @@ function deleteSelected(){
 // ---------------------------------------------------------------------------
 // Floors
 // ---------------------------------------------------------------------------
+function goFloor(i){
+  if (!plan.floors[i] || i === cur) return;
+  const up = i > cur;
+  cur = i; sel = null; buildFloors(); showPanel(); fit();
+  toast((up ? '↑ ' : '↓ ') + floor().name, 1200);
+}
 function buildFloors(){
   const el = $('floors'); el.innerHTML = '';
+  // bottom floor on the left, top floor on the right
   plan.floors.forEach((f, i) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'floor-tab' + (i === cur ? ' active' : '');
     b.textContent = f.name;
-    b.title = i === cur ? 'Tap again to rename' : '';
-    b.onclick = () => {
-      if (i === cur){
-        const name = prompt('Rename this floor', f.name);
-        if (name && name.trim()){ f.name = name.trim().slice(0,40); commit(); buildFloors(); }
-        return;
-      }
-      cur = i; sel = null; buildFloors(); showPanel(); fit();
-    };
+    if (i === cur){ b.setAttribute('aria-current', 'true'); b.title = 'Floor options'; b.innerHTML = FP.esc(f.name) + ' <span aria-hidden="true">▾</span>'; }
+    b.onclick = () => i === cur ? openFloorSheet() : goFloor(i);
     el.appendChild(b);
   });
   const add = document.createElement('button');
   add.type = 'button'; add.className = 'floor-tab add'; add.textContent = '+ Floor';
-  add.onclick = () => {
-    plan.floors.push({id:uid(), name:'Floor ' + (plan.floors.length + 1), items:[]});
-    cur = plan.floors.length - 1; sel = null; commit(); buildFloors(); showPanel(); fit();
-  };
+  add.onclick = () => addFloor(plan.floors.length);
   el.appendChild(add);
-  if (plan.floors.length > 1){
-    const del = document.createElement('button');
-    del.type = 'button'; del.className = 'floor-tab add'; del.textContent = 'Delete floor';
-    del.style.color = 'var(--danger)';
-    del.onclick = () => {
-      if (!confirm(`Delete "${floor().name}" and everything on it?`)) return;
-      plan.floors.splice(cur, 1); cur = Math.max(0, cur-1); sel = null; commit(); buildFloors(); showPanel(); fit();
-    };
-    el.appendChild(del);
-  }
+  const active = el.querySelector('.active'); if (active && active.scrollIntoView) active.scrollIntoView({block:'nearest', inline:'nearest'});
+  // up/down on the canvas
+  $('upBtn').disabled = cur >= plan.floors.length - 1;
+  $('downBtn').disabled = cur <= 0;
+  $('upBtn').title = plan.floors[cur+1] ? 'Up to ' + plan.floors[cur+1].name : 'This is the top floor';
+  $('downBtn').title = plan.floors[cur-1] ? 'Down to ' + plan.floors[cur-1].name : 'This is the bottom floor';
+  $('floorBadge').textContent = floor().name;
 }
+// Add a floor at position i (0 = new bottom floor). Stairs, lifts and escalators on the
+// neighbouring floor carry on into it, so you can see where they arrive.
+function addFloor(i){
+  const below = plan.floors[i-1], above = plan.floors[i];
+  const name = newFloorName(i);
+  const f = {id:uid(), name, items:[]};
+  const from = i === 0 ? above : below;
+  if (from) for (const it of from.items){
+    if (!FP.isVertical(it)) continue;
+    if (!it.link) it.link = uid();
+    f.items.push({id:uid(), kind:it.kind, name:it.name, x:it.x, y:it.y, w:it.w, h:it.h, rot:it.rot, link:it.link});
+  }
+  plan.floors.splice(i, 0, f);
+  cur = i; sel = null; commit(); buildFloors(); showPanel(); fit();
+  toast(f.items.length ? `Added ${f.name}, with the stairs and lifts from ${from.name}` : `Added ${f.name}`);
+}
+// Basement / Basement 2 below the bottom, Level 1, 2, 3 above the ground floor (or the bottom
+// floor when there is no ground floor), and "New floor" when squeezed in between.
+function newFloorName(i){
+  const taken = new Set(plan.floors.map(f => f.name.toLowerCase()));
+  const pick = (base, k) => { let nm; do { nm = k === 1 && base !== 'Level' ? base : base + ' ' + k; k++; } while (taken.has(nm.toLowerCase())); return nm; };
+  if (i === 0) return pick('Basement', 1);
+  if (i === plan.floors.length){
+    const g = plan.floors.findIndex(f => /ground|main|entry|street/i.test(f.name));
+    return pick('Level', i - (g >= 0 ? g : 0));
+  }
+  return pick('New floor', 1);
+}
+function openFloorSheet(){
+  const f = floor();
+  $('floorSheetTitle').textContent = f.name;
+  $('floorSheet').querySelector('[data-f="up"]').disabled = cur >= plan.floors.length - 1;
+  $('floorSheet').querySelector('[data-f="down"]').disabled = cur <= 0;
+  $('floorSheet').querySelector('[data-f="delete"]').disabled = plan.floors.length < 2;
+  openSheet('floorSheet');
+}
+$('floorSheet').addEventListener('click', e => {
+  const act = e.target.closest('[data-f]') && e.target.closest('[data-f]').dataset.f; if (!act) return;
+  closeSheets();
+  if (act === 'rename'){
+    const name = prompt('Rename this floor', floor().name);
+    if (name && name.trim()){ floor().name = name.trim().slice(0,40); commit(); buildFloors(); }
+  } else if (act === 'above') addFloor(cur + 1);
+  else if (act === 'below') addFloor(cur);
+  else if (act === 'up' || act === 'down'){
+    const j = act === 'up' ? cur + 1 : cur - 1; if (!plan.floors[j]) return;
+    const t = plan.floors[j]; plan.floors[j] = plan.floors[cur]; plan.floors[cur] = t; cur = j;
+    commit(); buildFloors(); render();
+  } else if (act === 'delete'){
+    if (plan.floors.length < 2 || !confirm(`Delete "${floor().name}" and everything on it? You can undo this.`)) return;
+    plan.floors.splice(cur, 1); cur = Math.max(0, cur-1); sel = null; commit(); buildFloors(); showPanel(); fit();
+  }
+});
+$('upBtn').onclick = () => goFloor(cur + 1);
+$('downBtn').onclick = () => goFloor(cur - 1);
 
 // ---------------------------------------------------------------------------
 // Sheets: menu, export, about
@@ -554,7 +666,14 @@ $('menuSheet').addEventListener('click', e => {
   if (act === 'import'){ $('fileInput').click(); closeSheets(); }
   if (act === 'about'){ closeSheets(); buildAbout(); openSheet('aboutSheet'); }
 });
-function syncSeg(){ document.querySelectorAll('#unitSeg button').forEach(b => b.classList.toggle('on', b.dataset.u === plan.units)); }
+$('guideSeg').addEventListener('click', e => {
+  const g = e.target.dataset.g; if (!g) return;
+  showGuide = g === 'on'; syncSeg(); render();
+});
+function syncSeg(){
+  document.querySelectorAll('#unitSeg button').forEach(b => b.classList.toggle('on', b.dataset.u === plan.units));
+  document.querySelectorAll('#guideSeg button').forEach(b => b.classList.toggle('on', (b.dataset.g === 'on') === showGuide));
+}
 $('unitSeg').addEventListener('click', e => {
   const u = e.target.dataset.u; if (!u) return;
   plan.units = u; syncSeg(); commit(); render(); showPanel();
@@ -569,7 +688,7 @@ $('fileInput').addEventListener('change', async e => {
 
 // load a new plan; keepHistory=false still lets "undo" go back to the previous plan
 function afterLoad(fresh){
-  cur = 0; sel = null; $('planName').value = plan.name;
+  cur = startFloor(plan); sel = null; $('planName').value = plan.name;
   if (fresh) resetHistory(); else commit();
   buildFloors(); showPanel(); fit();
 }
@@ -629,6 +748,8 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y' && !typing){ e.preventDefault(); redo(); return; }
   if (typing) return;
   if (e.key === 'Escape'){ closeSheets(); if (sel){ sel = null; render(); showPanel(); } }
+  if (e.key === 'PageUp'){ e.preventDefault(); goFloor(cur + 1); return; }
+  if (e.key === 'PageDown'){ e.preventDefault(); goFloor(cur - 1); return; }
   const it = sel && findItem(sel); if (!it) return;
   if (e.key === 'Delete' || e.key === 'Backspace'){ e.preventDefault(); deleteSelected(); }
   else if (e.key === 'r' || e.key === 'R'){ rotateItem(it); commit(); render(); updatePanelNumbers(); }
@@ -640,7 +761,33 @@ document.addEventListener('keydown', e => {
     commit(); render();
   }
 });
-window.addEventListener('resize', () => render());
+// Keep the plan on screen when the window or phone changes size or orientation.
+// Until the user pans or zooms, refit whenever the width changes. After that, keep the same
+// spot in the middle and scale with the width. Height-only changes (the keyboard, the bottom
+// panel switching between tiles and settings) just keep the middle where it was.
+let lastSize = null;
+function onStageResize(){
+  const r = stage.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  const prev = lastSize; lastSize = {w:r.width, h:r.height};
+  if (!prev){ fit(); return; }
+  if (prev.w === r.width && prev.h === r.height) return;
+  const widthChanged = Math.abs(prev.w - r.width) > 1;
+  if (widthChanged && !userView){ fit(); return; }
+  const cx = (prev.w/2 - view.tx)/view.s, cy = (prev.h/2 - view.ty)/view.s;
+  if (widthChanged) view.s = Math.max(0.03, Math.min(6, view.s * r.width / prev.w));
+  view.tx = r.width/2 - cx*view.s; view.ty = r.height/2 - cy*view.s;
+  // if the plan has ended up completely off screen, bring it back
+  const b = FP.floorBounds(floor());
+  if (b){
+    const x0 = b.x*view.s + view.tx, y0 = b.y*view.s + view.ty, x1 = x0 + b.w*view.s, y1 = y0 + b.h*view.s;
+    if (x1 < 20 || y1 < 20 || x0 > r.width - 20 || y0 > r.height - 20){ fit(); return; }
+  }
+  render();
+}
+if (window.ResizeObserver) new ResizeObserver(onStageResize).observe(stage);
+else window.addEventListener('resize', onStageResize);
+window.addEventListener('orientationchange', () => setTimeout(onStageResize, 250));
 
 // ---------------------------------------------------------------------------
 // Bridge for host apps: iframe postMessage, React Native, iOS WKWebView, Android WebView
@@ -668,7 +815,7 @@ const bridge = {
         case 'setOptions':
           if (m.formats !== undefined) allowedFormats = Array.isArray(m.formats) ? parseFormats(m.formats.join(',') || 'none') : null;
           if (m.theme) document.documentElement.dataset.theme = m.theme === 'dark' ? 'dark' : 'light';
-          if (m.plan){ plan = sanitizePlan(m.plan); cur = 0; sel = null; resetHistory(); }
+          if (m.plan){ plan = sanitizePlan(m.plan); cur = startFloor(plan); sel = null; resetHistory(); }
           if (m.units === 'm' || m.units === 'ft') plan.units = m.units;
           if (typeof m.name === 'string') plan.name = str(m.name, plan.name);
           $('planName').value = plan.name; $('exportBtn').hidden = allowedFormats && !allowedFormats.length;
@@ -746,7 +893,8 @@ function buildAbout(){
     <li><b>Move:</b> drag it. Rooms line up with neighbouring walls. Doors and windows snap onto the nearest wall and face into the room.</li>
     <li><b>Resize:</b> drag the blue dot, or type exact sizes in the panel.</li>
     <li><b>Pan and zoom:</b> drag empty space, pinch with two fingers, or use the mouse wheel.</li>
-    <li><b>Floors:</b> use <b>+ Floor</b>; tap the current floor's name to rename it.</li>
+    <li><b>Floors:</b> the strip under the title lists floors from the bottom up. <b>+ Floor</b> adds one on top. Tap the current floor for more: add a floor above or below, rename, reorder or delete. The ▲ ▼ buttons on the right of the canvas go up and down a floor. The floor below shows faintly so you can line things up; turn that off in the menu.</li>
+    <li><b>Stairs, lifts and escalators</b> are in the <b>Stairs &amp; lifts</b> tab. Select one and tap <b>Continue to…</b> to put the same stairs or lift on the next floor. The copies stay lined up when you move or resize either one, and <b>Go to…</b> takes you to the other floor.</li>
     <li>Your plan saves itself in this browser. Undo and redo are at the top.</li>
   </ul>
 
@@ -865,7 +1013,7 @@ webView.load(URLRequest(url: URL(string: "${A}?embed=1")!))
     ]
   }]
 }`)}
-  <p><code>kind</code> is <code>room</code>, an opening (<code>door</code>, <code>dbldoor</code>, <code>slider</code>, <code>window</code>, <code>opening</code>) or a furniture type such as <code>bed</code>, <code>sofa</code> or <code>toilet</code>. <code>rot</code> is 0, 90, 180 or 270.</p>
+  <p><code>kind</code> is <code>room</code>, an opening (<code>door</code>, <code>dbldoor</code>, <code>slider</code>, <code>window</code>, <code>opening</code>), a way between floors (<code>stairs</code>, <code>lstairs</code>, <code>spiral</code>, <code>elevator</code>, <code>escalator</code>, <code>ramp</code>) or a furniture type such as <code>bed</code>, <code>sofa</code> or <code>toilet</code>. <code>rot</code> is 0, 90, 180 or 270. <code>floors</code> run from the bottom up. Stairs and lifts that continue between floors share a <code>link</code> string.</p>
 
   <p><b>Credit.</b> The small "Service provided by zkitszo" mark stays on the editor and on exported images when you embed it.</p>
   <p>The full guide and a working demo page are in the project's <code>EMBEDDING.md</code> and <code>examples/</code> folder.</p>
@@ -882,7 +1030,7 @@ webView.load(URLRequest(url: URL(string: "${A}?embed=1")!))
 // ---------------------------------------------------------------------------
 $('planName').value = plan.name;
 buildPalette(); buildFloors(); showPanel(); resetHistory();
-requestAnimationFrame(fit);
+requestAnimationFrame(() => { lastSize = null; onStageResize(); });
 bridge.emit({type:'ready'});
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !embedded) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
