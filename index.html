@@ -1,0 +1,113 @@
+<!doctype html>
+<!-- Mobile Floorplan - MIT licence. Service provided by zkitszo. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#1f6feb">
+<meta name="description" content="Draw a floor plan on your phone with drag and drop, then export it as PNG, JPG, SVG, PDF, DXF, Sweet Home 3D, OBJ, CSV or JSON.">
+<title>Mobile Floorplan</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn" id="menuBtn" aria-label="Menu">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+  <input id="planName" class="plan-name" type="text" value="My floor plan" aria-label="Plan name" maxlength="80">
+  <button class="icon-btn" id="undoBtn" aria-label="Undo" disabled>
+    <svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
+  </button>
+  <button class="icon-btn" id="redoBtn" aria-label="Redo" disabled>
+    <svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg>
+  </button>
+  <button class="pill-btn" id="doneBtn" hidden>Done</button>
+  <button class="pill-btn primary" id="exportBtn">Export</button>
+</header>
+
+<nav class="floors" id="floors" aria-label="Floors"></nav>
+
+<main class="stage" id="stage">
+  <svg id="canvas" xmlns="http://www.w3.org/2000/svg" aria-label="Floor plan canvas">
+    <defs>
+      <pattern id="gridMinor" patternUnits="userSpaceOnUse" width="100" height="100">
+        <path id="gridPath" d="M100 0H0V100" fill="none" stroke="var(--grid)" stroke-width="1"/>
+      </pattern>
+    </defs>
+    <g id="world"></g>
+  </svg>
+  <div class="stage-tools">
+    <button class="icon-btn float" id="fitBtn" aria-label="Fit plan to screen">
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+  </div>
+  <div class="hint" id="hint">Drag a room up onto the grid to start.</div>
+  <div class="watermark" aria-label="Service provided by zkitszo">Service provided by <b>zkitszo</b></div>
+</main>
+
+<section class="dock" id="dock">
+  <div class="dock-tabs" role="tablist">
+    <button role="tab" class="dock-tab active" data-cat="rooms">Rooms</button>
+    <button role="tab" class="dock-tab" data-cat="openings">Doors &amp; windows</button>
+    <button role="tab" class="dock-tab" data-cat="furniture">Furniture</button>
+  </div>
+  <div class="palette" id="palette"></div>
+  <div class="props" id="props" hidden></div>
+</section>
+
+<!-- Menu sheet -->
+<div class="sheet-wrap" id="menuSheet" hidden>
+  <div class="sheet" role="dialog" aria-label="Menu">
+    <div class="sheet-grip"></div>
+    <button class="sheet-item" data-act="new">New blank plan</button>
+    <button class="sheet-item" data-act="sample">Load sample apartment</button>
+    <button class="sheet-item" data-act="import">Open a saved plan (.json)</button>
+    <div class="sheet-row">
+      <span>Units</span>
+      <div class="seg" id="unitSeg">
+        <button data-u="m">Metres</button><button data-u="ft">Feet</button>
+      </div>
+    </div>
+    <button class="sheet-item" data-act="about">About &amp; embedding guide</button>
+    <button class="sheet-item muted" data-act="close">Close</button>
+  </div>
+</div>
+
+<!-- Export sheet -->
+<div class="sheet-wrap" id="exportSheet" hidden>
+  <div class="sheet" role="dialog" aria-label="Export">
+    <div class="sheet-grip"></div>
+    <h2>Export or save</h2>
+    <div class="sheet-row" id="shareRow">
+      <span>Send to</span>
+      <div class="seg" id="deliverSeg">
+        <button data-d="download">Download</button><button data-d="share">Share…</button>
+      </div>
+    </div>
+    <div class="formats" id="formatList"></div>
+    <p class="small">Images and DXF use the floor you are looking at. PDF, 3D, Sweet Home 3D, CSV and JSON include every floor.</p>
+    <button class="sheet-item muted" data-act="close">Close</button>
+  </div>
+</div>
+
+<!-- About -->
+<div class="sheet-wrap" id="aboutSheet" hidden>
+  <div class="sheet tall" role="dialog" aria-label="About">
+    <div class="sheet-grip"></div>
+    <div class="about" id="aboutBody"></div>
+    <button class="sheet-item muted" data-act="close">Close</button>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".json,application/json" hidden>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="ghost" id="ghost" hidden></div>
+
+<script src="js/shapes.js"></script>
+<script src="js/exporters.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
