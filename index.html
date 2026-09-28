@@ -43,7 +43,16 @@
     <button class="icon-btn float" id="fitBtn" aria-label="Fit plan to screen">
       <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
     </button>
+    <div class="lift" role="group" aria-label="Change floor">
+      <button class="icon-btn" id="upBtn" aria-label="Floor above">
+        <svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>
+      </button>
+      <button class="icon-btn" id="downBtn" aria-label="Floor below">
+        <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+    </div>
   </div>
+  <div class="floor-badge" id="floorBadge" aria-live="polite"></div>
   <div class="hint" id="hint">Drag a room up onto the grid to start.</div>
   <div class="watermark" aria-label="Service provided by zkitszo">Service provided by <b>zkitszo</b></div>
 </main>
@@ -52,6 +61,7 @@
   <div class="dock-tabs" role="tablist">
     <button role="tab" class="dock-tab active" data-cat="rooms">Rooms</button>
     <button role="tab" class="dock-tab" data-cat="openings">Doors &amp; windows</button>
+    <button role="tab" class="dock-tab" data-cat="circulation">Stairs &amp; lifts</button>
     <button role="tab" class="dock-tab" data-cat="furniture">Furniture</button>
   </div>
   <div class="palette" id="palette"></div>
@@ -71,7 +81,31 @@
         <button data-u="m">Metres</button><button data-u="ft">Feet</button>
       </div>
     </div>
+    <div class="sheet-row">
+      <span>Show floor below</span>
+      <div class="seg" id="guideSeg">
+        <button data-g="on">On</button><button data-g="off">Off</button>
+      </div>
+    </div>
     <button class="sheet-item" data-act="about">About &amp; embedding guide</button>
+    <button class="sheet-item muted" data-act="close">Close</button>
+  </div>
+</div>
+
+<!-- Floor sheet -->
+<div class="sheet-wrap" id="floorSheet" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="floorSheetTitle">
+    <div class="sheet-grip"></div>
+    <h2 id="floorSheetTitle">Floor</h2>
+    <button class="sheet-item" data-f="above">Add a floor above</button>
+    <button class="sheet-item" data-f="below">Add a floor below</button>
+    <button class="sheet-item" data-f="rename">Rename</button>
+    <div class="floor-move">
+      <button class="sheet-item" data-f="down">Move down</button>
+      <button class="sheet-item" data-f="up">Move up</button>
+    </div>
+    <button class="sheet-item danger" data-f="delete">Delete this floor</button>
+    <p class="small">Floors are listed bottom to top. New floors pick up the stairs and lifts from the floor they are added next to.</p>
     <button class="sheet-item muted" data-act="close">Close</button>
   </div>
 </div>

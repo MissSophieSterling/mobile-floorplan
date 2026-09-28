@@ -169,6 +169,8 @@ function dxf(plan, floor){
       text('ROOM_LABELS', 8, {x:it.x+it.w/2, y:it.y+it.h/2 + fs*1.1}, fs*0.7, FP.fmtArea(it.w*it.h, plan.units).replace('²', '2').replace(' ft2', ' sq ft'));
     } else if (FP.isOpening(it)){
       prims(it, it.kind === 'window' ? 'WINDOWS' : 'DOORS', it.kind === 'window' ? 4 : 1);
+    } else if (FP.isVertical(it)){
+      prims(it, 'STAIRS_LIFTS', 6);
     } else {
       prims(it, 'FURNITURE', 3);
     }
@@ -247,7 +249,8 @@ function obj(plan){
     for (const it of f.items){
       if (FP.isRoom(it) || FP.isOpening(it)) continue;
       const s = FP.effSize(it);
-      box(`${f.name}_${it.name||it.kind}`, it.x, it.x+s.w, e, e+(FP.HEIGHTS[it.kind]||75), it.y, it.y+s.h);
+      const top = it.kind === 'elevator' ? FP.LEVEL_HEIGHT : (FP.HEIGHTS[it.kind]||75);   // lift shafts run storey to storey
+      box(`${f.name}_${it.name||it.kind}`, it.x, it.x+s.w, e, e+top, it.y, it.y+s.h);
     }
   });
   return {blob:new Blob([L.join('\n')+'\n'], {type:'model/obj'}), filename:fileBase(plan)+'.obj', mime:'model/obj'};

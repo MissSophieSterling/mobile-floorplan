@@ -275,11 +275,14 @@ Plain JSON. All lengths are in centimetres, whatever units the user sees. `x` an
 
 | Field | Values |
 |---|---|
-| `kind` | `room`; openings `door`, `dbldoor`, `slider`, `window`, `opening`; furniture `bed`, `sofa`, `armchair`, `table`, `rtable`, `chair`, `desk`, `wardrobe`, `tv`, `counter`, `stove`, `fridge`, `ksink`, `toilet`, `sink`, `bath`, `shower`, `washer`, `stairs`, `plant` |
+| `kind` | `room`; openings `door`, `dbldoor`, `slider`, `window`, `opening`; between floors `stairs`, `lstairs`, `spiral`, `elevator`, `escalator`, `ramp`; furniture `bed`, `sofa`, `armchair`, `table`, `rtable`, `chair`, `desk`, `wardrobe`, `tv`, `counter`, `stove`, `fridge`, `ksink`, `toilet`, `sink`, `bath`, `shower`, `washer`, `plant` |
 | `w`, `h` | Size before rotation. For openings, `w` runs along the wall. |
 | `rot` | `0`, `90`, `180` or `270`, clockwise |
+| `link` | optional, stairs and lifts only. Items on different floors with the same `link` string are the same stairs or shaft, and the editor keeps them lined up. |
 
 A door with `rot: 0` sits on the top wall of a room and swings down into it. `90` puts it on a right-hand wall, `180` on a bottom wall and `270` on a left-hand wall.
+
+`floors` are ordered from the bottom up: a basement comes before the ground floor. The 3D and Sweet Home 3D exports stack them in that order.
 
 Room area in square metres is `w * h / 10000`.
 
